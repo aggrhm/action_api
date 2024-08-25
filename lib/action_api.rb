@@ -30,9 +30,9 @@ module ActionAPI
       }
     end
 
-    attr_accessor :default_model_index_method
-    attr_accessor :default_model_save_method
-    attr_accessor :default_model_delete_method
+    attr_accessor :default_model_index_action
+    attr_accessor :default_model_save_action
+    attr_accessor :default_model_delete_action
 
     attr_accessor :transform_error, :transform_serializer_options
   end
