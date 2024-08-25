@@ -9,7 +9,6 @@ require "action_api/scope_responder"
 require "action_api/action_responder"
 require "action_api/actionable"
 require "action_api/model"
-require "action_api/enumeration"
 require "action_api/errors"
 require "action_api/active_model"
 
