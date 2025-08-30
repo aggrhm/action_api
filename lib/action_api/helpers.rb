@@ -137,26 +137,7 @@ module ActionAPI
     end
 
     def log_exception(ex, opts={})
-      if Rails.env.test?
-        puts ex.full_message
-      else
-        Rails.logger.info ex.full_message
-      end
-      if opts[:notify] != false
-        if defined?(ExceptionNotifier)
-          ExceptionNotifier.notify_exception(ex, opts)
-        end
-        if defined?(Appsignal)
-          Appsignal.set_error(ex)
-        end
-        if defined?(Datadog) && defined?(Datadog::Tracing)
-          span = Datadog::Tracing.active_span
-          span.set_error(ex) unless span.nil?
-        end
-      end
-    rescue => ex
-      Rails.logger.info ex.message
-      Rails.logger.info ex.backtrace.join("\n\t")
+      ActionAPI.config.log_exception.call(ex, opts)
     end
 
     def bool_tree(arr)

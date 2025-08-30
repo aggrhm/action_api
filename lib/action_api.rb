@@ -11,6 +11,10 @@ require "action_api/actionable"
 require "action_api/model"
 require "action_api/errors"
 require "action_api/active_model"
+require "action_api/automation/base_reactor"
+require "action_api/automation/event"
+require "action_api/automation/eventable"
+require "action_api/automation/reactor_service"
 
 module ActionAPI
   # Your code goes here...
@@ -20,21 +24,39 @@ module ActionAPI
   class Configuration
 
     def initialize
-      self.default_model_index_action = :index
-      self.default_model_save_action = :update
+      self.default_model_list_action = :list
+      self.default_model_create_action = :create
+      self.default_model_retrieve_action = :retrieve
+      self.default_model_update_action = :update
       self.default_model_delete_action = :delete
+
+      self.default_event_domain = nil
+
       self.transform_error = lambda {|err|
         return {detail: err.message, code: err.class.name.split("::").last, status: "500"}
       }
       self.transform_serializer_options = lambda {|topts|
       }
+
+      self.log_exception = lambda do |ex, opts|
+        Rails.logger.error(ex.full_message)
+      end
+      self.enqueue_job = lambda do |job|
+        raise "Job processing not configured."
+      end
     end
 
-    attr_accessor :default_model_index_action
-    attr_accessor :default_model_save_action
+    attr_accessor :default_model_list_action
+    attr_accessor :default_model_retrieve_action
+    attr_accessor :default_model_create_action
+    attr_accessor :default_model_update_action
     attr_accessor :default_model_delete_action
 
+    attr_accessor :default_event_domain
+
     attr_accessor :transform_error, :transform_serializer_options
+    attr_accessor :log_exception
+    attr_accessor :enqueue_job
   end
 
   def self.config
@@ -56,6 +78,17 @@ module ActionAPI
         memo && doc.attributes[k].to_s == v.to_s
       end
     }
+  end
+
+  def self.perform_job(job)
+    action = job['action']
+    context = action.split(".").first
+    case context
+    when 'reactor_service'
+      Automation::ReactorService.shared.perform_job(job)
+    else
+      raise "Unknown job context: #{action}"
+    end
   end
 
 end

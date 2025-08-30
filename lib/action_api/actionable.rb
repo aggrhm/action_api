@@ -9,17 +9,28 @@ module ActionAPI
 
     module ClassMethods
 
-      def perform_action(action, opts)
+      def action_responder
         # find action responder or create anonymous one
         rsp_cls = ActionResponder.find_for_class(self) || ActionResponder
         rsp = rsp_cls.new(resource_class: self)
-        rsp.perform(action, opts)
+      end
+
+      def perform_action(action, opts)
+        action_responder.perform(action, opts)
+      end
+
+      def perform_action!(action, opts)
+        action_responder.perform!(action, opts)
       end
 
     end
 
     def perform_action(action, opts)
       return self.class.perform_action(action, opts.merge(instance: self))
+    end
+
+    def perform_action!(action, opts)
+      return self.class.perform_action!(action, opts.merge(instance: self))
     end
 
   end

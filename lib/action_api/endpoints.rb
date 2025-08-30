@@ -35,9 +35,11 @@ module ActionAPI
         #puts "Adding route for #{rp}"
         ep = EndpointBuilder.new(mount: self, class_name: model)
         if opts[:crud] != false
-          ep.get mp, class_name: model, class_action: ActionAPI.config.default_model_index_action
-          ep.post ms, class_name: model, action: ActionAPI.config.default_model_save_action, instantiate_if_nil: true
-          ep.delete ms, class_name: model, action: ActionAPI.config.default_model_delete_action
+          ep.get mp, class_name: model, class_action: ActionAPI.config.default_model_list_action
+          ep.post mp, class_name: model, class_action: ActionAPI.config.default_model_create_action
+          ep.get "#{mp}/:id", class_name: model, action: ActionAPI.config.default_model_retrieve_action
+          ep.patch "#{mp}/:id", class_name: model, action: ActionAPI.config.default_model_update_action
+          ep.delete "#{mp}/:id", class_name: model, action: ActionAPI.config.default_model_delete_action
         end
         ep.instance_exec(&block) if block
       end
@@ -53,6 +55,10 @@ module ActionAPI
 
       def post(path, opts)
         add_endpoint(:post, path, opts)
+      end
+
+      def patch(path, opts)
+        add_endpoint(:patch, path, opts)
       end
 
       def get(path, opts)

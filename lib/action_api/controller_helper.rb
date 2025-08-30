@@ -56,14 +56,9 @@ module ActionAPI
     end
 
     def handle_api_request
-      begin
-        # call endpoint method
-        prepare_request_context
-        res = call_endpoint_action(request_endpoint)
-      rescue => ex
-        ActionAPI.log_exception(ex)
-        res = {success: false, error: ex}
-      end
+      # call endpoint method
+      prepare_request_context
+      res = call_endpoint_action(request_endpoint)
       render_result(res)
     end
 
@@ -85,11 +80,7 @@ module ActionAPI
         rcv_action = endpoint[:action]
       end
 
-      if rcv.respond_to?(:perform_action)
-        res = rcv.perform_action rcv_action, request_context: r_ctx
-      else
-        res = rcv.send rcv_action, **r_ctx.to_action_params
-      end
+      res = rcv.perform_action rcv_action, request_context: r_ctx
       return res
     end
 
@@ -114,11 +105,19 @@ module ActionAPI
 
     # Render result to JSON using the serializers
     def render_result(res)
+      if res.success?
+        render_successful_result(res)
+      else
+        render_errored_result(res)
+      end
+    end
+
+    def render_successful_result(res)
       rc = request_context
 
       # find serializer for data
       def_ser_name = self.class.action_api_options[:default_serializer_name]
-      ser_cls = ActionAPI.serializer_class_for(res[:data]) || def_ser_name.constantize
+      ser_cls = ActionAPI.serializer_class_for(res.data) || def_ser_name.constantize
       ser_opts = {
         params: {request_context: rc}
       }
@@ -127,41 +126,22 @@ module ActionAPI
         ser_opts[:fields]  = rc.fields   if rc.fields.present?
         ser_opts[:include] = rc.includes if rc.includes.present?
       end
-      ser_opts[:meta] = res[:meta] if res[:meta].present?
-      ActionAPI.config.transform_serializer_options.call({data: res[:data], options: ser_opts, serializer_class: ser_cls, request_context: rc})
-      json = ser_cls.new(res[:data], ser_opts).serializable_hash
+      ser_opts[:meta] = res.meta if res.meta.present?
+      ActionAPI.config.transform_serializer_options.call({data: res.data, options: ser_opts, serializer_class: ser_cls, request_context: rc})
+      json = ser_cls.new(res.data, ser_opts).serializable_hash
 
-      # errors
-      errs = [res[:errors], res[:error]].flatten(1).compact
-      err_status = nil
-      if res[:success] == false || errs.length
-        jerrs = json["errors"] = []
-        jerr = {}
-        errs.each do |err|
-          jerr = {}
-          if err.is_a?(String)
-            jerr = {detail: err}
-          elsif err.is_a?(Hash)
-            jerr = {detail: err[:message] || err[:detail], code: err[:code], status: err[:status].try(:to_s), meta: err[:meta] || {}}
-          elsif err.is_a?(ActionAPI::APIError)
-            jerr = err.to_json_api
-          else
-            jerr = ActionAPI.config.transform_error.call(err)
-          end
-          jerr[:code] ||= "APIError"
-          jerr[:status] ||= "500"
-          err_status ||= jerr[:status]    # set response status
-          jerrs << jerr
-        end
-      end
+      render :json => ActiveSupport::JSON.encode(json), :status => 200
+    end
 
-      if res[:success]
-        status = "200"
-      else
-        status = err_status || "500"
-      end
-
-      render :json => ActiveSupport::JSON.encode(json), :status => status
+    def render_error_result(res)
+      errors = res.errors.collect{|e| 
+        ActionAPI.config.transform_error.call(err)
+      }
+      max_status = errors.collect{|e| e["status"]}.compact.max
+      json = {
+        errors: errors
+      }
+      render :json => ActiveSupport::JSON.encode(json), :status => max_status
     end
 
   end
