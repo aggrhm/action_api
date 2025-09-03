@@ -40,13 +40,13 @@ module ActionAPI
       begin
         res = execute_action(action, opts)
         # prepare response
-        if !res.is_a?(ActionResponse)
-          res = ActionResponse.new(data: res)
+        if !res.is_a?(RequestResult)
+          res = RequestResult.new(data: res)
         end
       rescue => ex
         # prepare error
         ActionAPI.log_exception(ex)
-        res = ActionResponse.new(errors: [ex])
+        res = RequestResult.new(errors: [ex])
         res.data = inst if inst
       end
       return res
@@ -147,32 +147,6 @@ module ActionAPI
       # perform transaction
       model.class.transaction do
         yield
-      end
-    end
-
-  end
-
-  class ActionResponse
-    attr_accessor :data, :meta, :errors
-
-    def initialize(data: nil, meta: nil, errors: [])
-      self.data = data
-      self.meta = meta
-      self.errors = errors
-    end
-
-    def success?
-      errors.blank?
-    end
-    alias_method :success, :success?
-
-    def [](key)
-      self.send(key)
-    end
-
-    def raise_if_error!
-      if !success?
-        raise errors.first
       end
     end
 

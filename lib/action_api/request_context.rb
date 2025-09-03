@@ -32,6 +32,12 @@ module ActionAPI
       ActionAPI.log_exception(ex)
     end
 
+    def param(field, default: nil)
+      ret = ActionAPI.parse_opts(params[field])
+      ret = default if ret.nil?
+      return ret
+    end
+
     def params=(val)
       @params = val.try(:with_indifferent_access)
       @processed_params = @params.dup
@@ -77,7 +83,7 @@ module ActionAPI
     end
 
     def page
-      params[:page] || 1
+      params[:page] || {}
     end
 
     def fields
@@ -110,15 +116,6 @@ module ActionAPI
 
     def enhances=(val)
       params[:enhances] = val
-    end
-
-    # use this when need a subcontext hash
-    def to_action_params
-      ret = {}
-      ret[:actor] = actor
-      ret[:params] = params
-      ret[:request_context] = self
-      return ret
     end
 
   end

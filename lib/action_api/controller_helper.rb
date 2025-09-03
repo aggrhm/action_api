@@ -133,8 +133,8 @@ module ActionAPI
       render :json => ActiveSupport::JSON.encode(json), :status => 200
     end
 
-    def render_error_result(res)
-      errors = res.errors.collect{|e| 
+    def render_errored_result(res)
+      errors = res.errors.collect{|err| 
         ActionAPI.config.transform_error.call(err)
       }
       max_status = errors.collect{|e| e["status"]}.compact.max

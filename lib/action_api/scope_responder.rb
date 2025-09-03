@@ -29,8 +29,8 @@ module ActionAPI
       default_selectors.merge(request_context.selectors)
     end
 
-    def query_sort
-      request_context.sort
+    def query_aggregations
+      request_context.param(:aggregations, default: {})
     end
 
     def default_relation
@@ -41,70 +41,43 @@ module ActionAPI
       request_context.actor
     end
 
+    def params
+      request_context.params
+    end
+
     def includes
       return request_context.includes
     end
 
-    def build_database_relation(base=nil)
-      process_request_context
-      sort = query_sort
-      base ||= default_relation
-      base = base.preload(includes) if includes.present?
-      base = query_selectors.reduce(base) do |chain, (scope_name, scope_args)|
-        if scope_args.present?
-          if scope_args.is_a?(Hash)
-            chain.public_send(scope_name, **scope_args.symbolize_keys)
-          else
-            scope_args_array = [scope_args].flatten
-            chain.public_send(scope_name, *scope_args_array)
-          end
-        else
-          chain.public_send(scope_name)
-        end
-      end
+    def build_result
+      initialize_result
 
-      # add sort
-      if sort.present?
-        base = base.public_send(sort.to_sym)
-      end
-      return base
+      # build data and pagination
+      prepare_data_result
+
+      # build aggregations
+      prepare_aggregations_result if query_aggregations.present?
+
+      # allow additional result enhancements
+      enhance_result
+
+      return @current_result
     end
 
-    def build_database_result
-      ctx = request_context
-      params = request_context.params
-      ret = { success: true, error: nil, data: nil, meta: {} }
+    def initialize_result
+      @current_result = ActionAPI::RequestResult.new(meta: {warnings: []})
+    end
 
-      if params.key?(:id)
-        rel = build_database_relation(accessible_scope)
-        ret[:data] = rel.find(params[:id])
-      else
-        rel = build_database_relation
-        # TODO: Possibly replace with pagy?
-        data = rel.limit(pagination[:limit]).offset(pagination[:offset]).to_a
-        count = rel.reselect(:id).reorder(nil).distinct.count(:all)
+    def prepare_data_result
 
-        pages_count = (count / pagination[:limit].to_f).ceil
-        if params.key?(:first)
-          data = data.first
-        elsif params.key?(:last)
-          data = data.last
-        end
+    end
 
-        if pagination[:all] && count > max_limit
-          ret[:error] = ActionAPI::InvalidParamError.new(message: "Requested all records, but there are more than max_limit: #{max_limit}.")
-        end
-        ret[:data] = data
-        ret[:meta] = {count: count, pages_count: pages_count, page: ctx.page}
-      end
+    def prepare_aggregations_result
 
-      if ret[:data].nil?
-        ret[:success] = false
-        ret[:error] ||= ActionAPI::ResourceNotFoundError.new
-      end
+    end
 
-      enhance_items(ret[:data].is_a?(Array) ? ret[:data] : [ret[:data]])
-      return ret
+    def enhance_result
+
     end
 
     def item(opts={})
@@ -117,40 +90,50 @@ module ActionAPI
       res[:data]
     end
 
-    def enhance_items(items)
-      # use enhances here
-    end
-
-    def count
+    def count(opts={})
       res = result(opts)
-      res[:count]
+      res[:meta][:page][:count]
     end
 
     def pagination
       @pagination ||= begin
         ctx = request_context
-        limit = ctx.limit || 100
-        page = ctx.page || 1
+        page = ctx.page || {}
+        limit = page["size"].blank? ? 100 : page["size"].to_i
+        pnum = page["number"].blank? ? 1 : page["number"].to_i
         all = false
         offset = 0
 
         raise if limit > max_limit
 
-        if limit == 0
+        if limit == -1
           limit = max_limit
           all = true
         end
 
-        if page && limit
-          offset = (page - 1) * limit
+        if pnum && limit
+          offset = (pnum - 1) * limit
         end
-
-        { limit: limit, offset: offset, all: all }
+        { page_number: pnum, limit: limit, offset: offset, all: all }
       end
     end
 
-    def build_result
-      build_database_result
+    def sorting
+      @sorting ||= begin
+        sort = request_context.sort
+        if sort.blank?
+          return {sort_name: nil}
+        end
+
+        sort_name = sort; dir = :asc
+        if sort[0] == "-"
+          sort_name = sort[1..-1]
+          dir = :desc
+        end
+        sort_scope = "order_by_#{sort_name}".to_sym
+
+        {sort_name: sort_name, direction: dir, sort_scope: sort_scope}
+      end
     end
 
     def result(opts={})
@@ -161,14 +144,15 @@ module ActionAPI
     end
 
     def process_request_context
-      # filters
       rc = request_context
-      if rc.sort.present?
-        doc = ActionAPI.find_api_docs(resource_class: self.class, attributes: {sort: rc.sort, is_public: true}).first
-        raise "Sort #{rc.sort} could not be found" if doc.nil?
-        rc.sort = rc.sort.to_sym
+
+      # sorting
+      if sorting[:sort_name].present?
+        doc = ActionAPI.find_api_docs(resource_class: self.class, attributes: {sort: sorting[:sort_name], is_public: true}).first
+        raise "Sort #{sorting[:sort_name]} could not be found" if doc.nil?
       end
 
+      # filters
       rc.filters.each do |name, args|
         # find doc for scope
         doc = ActionAPI.find_api_docs(resource_class: self.class, attributes: {scope: name, is_public: true}).first
@@ -215,10 +199,6 @@ module ActionAPI
       raise 'You must define a scope responder with `accessible_scope`'
     end
 
-    def allowed_query_sort_fields
-      nil
-    end
-
     def allowed_polymorphic_ar_includes
       {}
     end
@@ -252,6 +232,86 @@ module ActionAPI
         end
       end
       return ret
+    end
+
+    def build_database_relation(base=nil)
+      process_request_context
+      base ||= default_relation
+      base = base.preload(includes) if includes.present?
+      base = query_selectors.reduce(base) do |chain, (scope_name, scope_args)|
+        if scope_args.present?
+          if scope_args.is_a?(Hash)
+            chain.public_send(scope_name, **scope_args.symbolize_keys)
+          else
+            scope_args_array = [scope_args].flatten
+            chain.public_send(scope_name, *scope_args_array)
+          end
+        else
+          chain.public_send(scope_name)
+        end
+      end
+
+      # add sort
+      if sorting[:sort_name].present?
+        begin
+          base = base.public_send(sorting[:sort_scope], direction: sorting[:direction])
+        rescue ArgumentError
+          raise APIError, "Sort '#{sorting[:sort_name]}' does not properly accept direction."
+        end
+      end
+      return base
+    end
+
+    def accessible_database_relation
+      @accessible_database_relation ||= build_database_relation(accessible_scope)
+    end
+
+    def database_relation
+      @database_relation ||= build_database_relation
+    end
+
+    def prepare_data_result
+      if params.key?(:id)
+        rel = accessible_database_relation
+        @current_result.data = rel.find(params[:id])
+      else
+        rel = database_relation
+
+        # fetch data
+        if pagination[:limit] == 0
+          data = []
+        else
+          data = rel.limit(pagination[:limit]).offset(pagination[:offset]).to_a
+          if params.key?(:first)
+            data = data.first
+          elsif params.key?(:last)
+            data = data.last
+          end
+        end
+
+        @current_result.data = data
+
+        # add pagination
+        prepare_pagination_result
+      end
+
+      if @current_result.data.nil?
+        raise ActionAPI::ResourceNotFoundError.new
+      end
+
+      return rel
+    end
+
+    def prepare_pagination_result
+      count = database_relation.reselect(:id).reorder(nil).distinct.count(:all)
+
+      pages_count = (count / pagination[:limit].to_f).ceil
+      pnum = pagination[:page_number]
+      poffset = pagination[:offset]
+      if pagination[:all] && count > max_limit
+        @current_result.meta[:warnings] << { message: "Requested all records, but there are more than max_limit: #{max_limit}." }
+      end
+      @current_result.meta[:page] = { records_count: count, pages_count: pages_count, number: pnum, size: pagination[:limit], offset: pagination[:offset] }
     end
 
   end
