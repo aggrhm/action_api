@@ -9,6 +9,9 @@ module ActionAPI
     module ClassMethods
 
       def api_doc(attrs={}, &block)
+        # NOTE: User should be able to subclass the default
+        # APIDocBuilder class and set it as a default for
+        # this library to be used here.
         builder = APIDocBuilder.new(self, attrs, &block)
         doc = builder.doc
         ActionAPI.docs[doc.context] = doc
@@ -17,23 +20,27 @@ module ActionAPI
       end
 
       def publish_action(action, &block)
-        api_doc({action: action, is_public: true}, &block)
+        api_doc({kind: :action, name: action, is_public: true}, &block)
       end
 
-      def publish_scope(scope, &block)
-        api_doc({scope: scope, is_public: true}, &block)
+      def publish_filter(filter, &block)
+        api_doc({kind: :filter, name: filter, is_public: true}, &block)
       end
 
-      def publish_scopes(*scopes, &block)
-        scopes.each {|scope| publish_scope(scope, &block)}
+      def publish_filters(*filters, &block)
+        filters.each {|filter| publish_filter(filter, &block)}
       end
 
       def publish_sort(sort, &block)
-        api_doc({sort: sort, is_public: true}, &block)
+        api_doc({kind: :sort, name: sort, is_public: true}, &block)
       end
 
       def publish_sorts(*sorts, &block)
         sorts.each {|sort| publish_sort(sort, &block)}
+      end
+
+      def publish_scope(scope, &block)
+        Rails.logger.info("The `publish_scope` method is deprecated.")
       end
 
       def api_docs
@@ -46,23 +53,16 @@ module ActionAPI
 
   class APIDoc
 
-    attr_reader :attributes
+    attr_reader :attributes, :index
 
     def initialize
       @attributes = {}
+      @index = {}
     end
 
     def context
       ret = attributes[:context]
-      if ret.nil?
-        if attributes[:action]
-          ret = "#{resource_class.to_s}.action.#{action}"
-        elsif attributes[:scope]
-          ret = "#{resource_class.to_s}.scope.#{scope}"
-        elsif attributes[:sort]
-          ret = "#{resource_class.to_s}.sort.#{sort}"
-        end
-      end
+      ret ||= "#{resource_class.to_s}.#{kind.to_s}.#{name.to_s}"
       return ret
     end
 
@@ -71,8 +71,11 @@ module ActionAPI
     end
 
     def append(key, val)
-      attributes[key.to_sym] ||= []
-      attributes[key.to_sym] << val
+      key = key.to_sym
+      attributes[key] ||= []
+      attributes[key] << val
+      index[key] ||= {}
+      index[key][val[:name].to_s] = val
     end
 
     def method_missing(name, *args)
@@ -95,11 +98,11 @@ module ActionAPI
     end
 
     def param(name, type, desc=nil, opts={})
-      doc.append(:params, {name: name, type: type, description: desc, meta: opts})
-    end
-
-    def nested_param(parent, name, type, desc=nil, opts={})
-      doc.append(:nested_params, {parent: parent, name: name, type: type, description: desc, meta: opts})
+      if desc.is_a?(Hash)
+        opts = desc
+        desc = nil
+      end
+      doc.append :params, {name: name, type: type, description: desc, meta: opts}
     end
 
     def method_missing(name, *args)

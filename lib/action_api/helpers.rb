@@ -87,31 +87,40 @@ module ActionAPI
       return ret
     end
 
-    def process_params_with_api_doc(params, doc)
-      ret = {}
+    def process_params_with_api_doc(params, doc, on_undefined: nil)
+      ret = {}.with_indifferent_access
       doc = doc.is_a?(String) ? ActionAPI.docs[doc] : doc
       raise "Could not properly parse parameters, context not found." if doc.nil?
 
-      # transform each param
-      doc.params.each do |param|
+      # process each param
+      params.each do |key, val|
         begin
-          pt = param[:type]
-          pn = param[:name]
-          # skip if not present
-          next if !params.key?(pn)
-          val = params[pn]
-          if param[:array]
+          dparam = doc.index[:params][key.to_s]
+          if dparam.nil?
+            case on_undefined
+            when :raise
+              raise "Param '#{key}' not defined"
+            when :skip
+              # do nothing
+            else
+              ret[key.to_sym] = val
+            end
+            next
+          end
+          pt = dparam[:type]
+
+          if dparam[:array]
             if !val.is_a?(Array)
-              val = [val].compact
+              val = val.split(",").compact
             end
             nval = val.collect {|v| parse_value_with_type(v, pt)}
           else
             nval = parse_value_with_type(val, pt)
           end
-          ret[pn] = nval
+          ret[key.to_sym] = nval
         rescue => ex
           ActionAPI.log_exception(ex, notify: false)
-          raise ActionAPI::APIError.new("Param '#{pn}' could not be parsed.")
+          raise ActionAPI::APIError.new("Param '#{key}' could not be parsed.")
         end
       end
       return ret

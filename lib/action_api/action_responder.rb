@@ -102,9 +102,9 @@ module ActionAPI
       end
       rc = request_context
       # action params
-      doc = ActionAPI.find_api_docs(resource_class: responder_class, attributes: {action: action}).first
+      doc = ActionAPI.find_api_docs(resource_class: responder_class, attributes: {kind: :action, name: action}).first
       if doc
-        rc.processed_params = rc.processed_params.merge(ActionAPI.process_params_with_api_doc(rc.params, doc))
+        rc.processed_params = ActionAPI.process_params_with_api_doc(rc.params, doc)
       end
     end
 

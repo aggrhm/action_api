@@ -62,24 +62,8 @@ module ActionAPI
       @params
     end
 
-    def selector_names
-      selectors.keys
-    end
-
-    def scope
-      filters
-    end
-
-    def selectors
-      filters
-    end
-
     def filters
-      params[:filters] || {}
-    end
-
-    def limit
-      params[:limit]
+      params[:filter] || {}
     end
 
     def page
@@ -94,28 +78,8 @@ module ActionAPI
       params[:include]
     end
 
-    def enhances
-      params[:enhances]
-    end
-
     def sort
       params[:sort]
-    end
-
-    def sort=(val)
-      params[:sort] = val
-    end
-
-    def selectors=(val)
-      params[:filters] = val
-    end
-
-    def includes=(val)
-      params[:include] = val
-    end
-
-    def enhances=(val)
-      params[:enhances] = val
     end
 
   end
