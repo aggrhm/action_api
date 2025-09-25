@@ -104,9 +104,10 @@ if defined?(Rails::Railtie)
 
       mount = ActionAPI::Endpoints.configure(mount_path, opts, &block)
 
-      mount.endpoints.each do |key, val|
+      mount.endpoints.each do |key, opts|
         method, path = key
-        match path, controller: mount.controller, action: "handle_api_request", via: method, defaults: {qs_api_mount_path: mount.full_path}
+        full_path = opts[:full_path]
+        match full_path, controller: mount.controller, action: "handle_api_request", via: method, defaults: {api_mount_path: mount.full_path, api_endpoint_path: path}
       end
     end
 

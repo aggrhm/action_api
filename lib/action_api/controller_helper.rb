@@ -38,17 +38,12 @@ module ActionAPI
     def request_endpoint
       return @endpoint if !@endpoint.nil?
       # determine mount
-      mp = params[:qs_api_mount_path]
+      mp = params[:api_mount_path]
+      ep = params[:api_endpoint_path]
       @mount = ActionAPI::Endpoints.mounts[mp]
       # determine endpoint
       method = request.method.downcase.to_sym
-      path = request.path
-      eng_path = self.class.action_api_options[:engine_path]
-      if eng_path.present?
-        path = path[eng_path.length..-1]
-      end
-      #puts path
-      @endpoint = @mount.endpoints[ [method, path] ]
+      @endpoint = @mount.endpoints[ [method, ep] ]
     end
 
     def prepare_request_context

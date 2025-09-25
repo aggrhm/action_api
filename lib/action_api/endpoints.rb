@@ -71,9 +71,10 @@ module ActionAPI
 
       def add_endpoint(method, path, opts)
         method = method.to_sym
-        key = [method, File.join(@mount.path, path)]
+        key = [method, path]
         opts[:method] = method
         opts[:path] = path
+        opts[:full_path] = File.join(@mount.path, path)
         if opts[:class_action]
           opts[:name] ||= "#{@endpoint_options[:class_name]}::#{opts[:class_action]}"
         else
