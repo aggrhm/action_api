@@ -34,6 +34,7 @@ module ActionAPI
         mp = ms.pluralize
         #puts "Adding route for #{rp}"
         ep = EndpointBuilder.new(mount: self, class_name: model)
+        ep.instance_exec(&block) if block
         if opts[:crud] != false
           ep.get mp, class_name: model, class_action: ActionAPI.config.default_model_list_action
           ep.post mp, class_name: model, class_action: ActionAPI.config.default_model_create_action
@@ -41,7 +42,7 @@ module ActionAPI
           ep.patch "#{mp}/:id", class_name: model, action: ActionAPI.config.default_model_update_action
           ep.delete "#{mp}/:id", class_name: model, action: ActionAPI.config.default_model_delete_action
         end
-        ep.instance_exec(&block) if block
+
       end
 
     end
