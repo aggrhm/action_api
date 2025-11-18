@@ -60,42 +60,11 @@ module ActionAPI
     def call_endpoint_action(endpoint)
       r_ctx = request_context
 
-      if endpoint[:class_action].present?
-        Rails.logger.debug "Endpoint: #{endpoint[:class_name]}.#{endpoint[:class_action]}"
-        rcv = model_class
-        rcv_action = endpoint[:class_action]
-      else
-        # load model
-        load_model_instance
-        if (endpoint[:instantiate_if_nil] == true) && @model.nil?
-          @model = model_class.new
-        end
-        Rails.logger.debug "Endpoint: #{endpoint[:class_name]}.#{endpoint[:action]}"
-        rcv = @model
-        rcv_action = endpoint[:action]
-      end
-
+      Rails.logger.debug "Endpoint: #{endpoint[:class_name]}.#{endpoint[:action]}"
+      rcv = model_class
+      rcv_action = endpoint[:action]
       res = rcv.perform_action rcv_action, request_context: r_ctx
       return res
-    end
-
-    def model_scope_responder
-      @model_scope_responder ||= begin
-        if defined?(model_class::ScopeResponder)
-          cls = model_class::ScopeResponder
-        else
-          cls = ActionAPI::ActiveRecordScopeResponder
-        end
-        cls.new(resource_class: model_class, request_context: request_context)
-      end
-    end
-
-    def load_model_instance
-      if params[:id].present?
-        @model = model_scope_responder.item
-        raise ActionAPI::Errors::ResourceNotFoundError if @model.nil?
-      end
-      return @model
     end
 
     # Render result to JSON using the serializers

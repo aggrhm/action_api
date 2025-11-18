@@ -36,8 +36,8 @@ module ActionAPI
         ep = EndpointBuilder.new(mount: self, class_name: model)
         ep.instance_exec(&block) if block
         if opts[:crud] != false
-          ep.get mp, class_name: model, class_action: ActionAPI.config.default_model_list_action
-          ep.post mp, class_name: model, class_action: ActionAPI.config.default_model_create_action
+          ep.get mp, class_name: model, action: ActionAPI.config.default_model_list_action
+          ep.post mp, class_name: model, action: ActionAPI.config.default_model_create_action
           ep.get "#{mp}/:id", class_name: model, action: ActionAPI.config.default_model_retrieve_action
           ep.patch "#{mp}/:id", class_name: model, action: ActionAPI.config.default_model_update_action
           ep.delete "#{mp}/:id", class_name: model, action: ActionAPI.config.default_model_delete_action
@@ -76,11 +76,7 @@ module ActionAPI
         opts[:method] = method
         opts[:path] = path
         opts[:full_path] = File.join(@mount.path, path)
-        if opts[:class_action]
-          opts[:name] ||= "#{@endpoint_options[:class_name]}::#{opts[:class_action]}"
-        else
-          opts[:name] ||= "#{@endpoint_options[:class_name]}##{opts[:action]}"
-        end
+        opts[:name] ||= "#{@endpoint_options[:class_name]}##{opts[:action]}"
         @mount.endpoints[key] = @endpoint_options.merge(opts)
       end
 

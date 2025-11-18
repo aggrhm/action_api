@@ -4,11 +4,11 @@ Provider::Engine.routes.draw do
 
     model_endpoints_for("User", crud: true) do
       # --- added by default
-      # get  "/users", class_action: :index
+      # get  "/users", action: :index
       # post  "/user", action: :update # /user?id=123
       # delete "/user", action: :delete
       # ---
-      post "/users/do_something", class_action: "do_something"
+      post "/users/do_something", action: "do_something"
     end
 
   end

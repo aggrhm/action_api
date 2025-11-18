@@ -61,46 +61,41 @@ module ActionAPI
     def execute_action(action, opts)
       @action_context = {}
       action = action.to_s
-      # find action responder
       @action_context[:action] = action.to_sym
       inst = opts[:instance]
-      receiver = opts[:instance] || resource_class
-      res = nil
-      rsp_cls = self.class
-      rsp = self
-      raise "No action responder was found for #{rsp_cls.to_s}" if rsp_cls.nil?
 
       # prepare request
       @action_context[:instance] = inst
       @action_context[:request_context] = req = (opts[:request_context] || RequestContext.new)
       req.actor = opts[:actor] if opts.key?(:actor)
       req.params = opts[:params] if opts.key?(:params)
+      process_request_context(req)
 
-      # process request
-      process_request_context(req, responder: rsp, action: action)
-
-      # perform the request
-      rsp_args = inst ? [inst] : []
-
-      arity = rsp.method(action.to_sym).arity
-      if arity < rsp_args.length
-        raise ArgumentError, 'Expected no instance argument but one was given'
-      elsif arity > rsp_args.length
-        raise ArgumentError, 'Expected instance argument, but none was given'
+      # prepare instance
+      arity = self.method(action.to_sym).arity
+      action_args = []
+      if arity == 1
+        if inst.blank?
+          inst = @action_context[:instance] = load_instance()
+          raise ActionAPI::Errors::ResourceNotFoundError if inst.blank?
+        end
+        action_args = [inst]
+      elsif arity == 0
+        raise ArgumentError, "Action '#{action}' expected no instance argument but one was given" if inst
+      elsif arity > 1
+        raise ArgumentError, "Action '#{action}' expects an improper number of arguments"
       end
 
-      res = rsp.public_send action, *rsp_args
+      # perform the request
+      res = self.public_send action, *action_args
 
       return res
     end
 
-    def process_request_context(request_context, responder:, action:)
-      if responder.class == Class
-        responder_class = responder
-      else
-        responder_class = responder.class
-      end
+    def process_request_context(request_context)
+      responder_class = self.class
       rc = request_context
+      action = action_context[:action].to_s
       # action params
       doc = ActionAPI.find_api_docs(resource_class: responder_class, attributes: {kind: :action, name: action}).first
       if doc
@@ -132,6 +127,10 @@ module ActionAPI
 
     def params
       request_context.params
+    end
+
+    def load_instance
+      resource_class.scope_responder(request_context).item
     end
 
     def actor_policy(model)
